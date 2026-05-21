@@ -1,3 +1,19 @@
+#!/usr/bin/python3
+"""
+Audio-to-SRT transcription script using Faster-Whisper.
+
+Steps:
+1. Splits a .wav audio file into fixed-length chunks using ffmpeg.
+2. Loads a Faster-Whisper model for CPU-based transcription.
+3. Transcribes each chunk sequentially and writes results into an .SRT subtitle file.
+
+Input:
+    --audioFileName <filename.wav>
+
+Output:
+    Subtitle file (.SRT) saved in /home/yuanqing/fasterWhisper/outputSRTFiles/
+"""
+
 import os
 import glob
 import subprocess
@@ -5,67 +21,74 @@ import time
 from faster_whisper import WhisperModel
 import argparse
 
-def getTimestamp(seconds):
+
+def get_timestamp(seconds: float) -> str:
+    """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)."""
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
-    return (f"{int(hours):02}:{int(minutes):02}:{secs:06.3f}").replace(".", ",")
+    return f"{int(hours):02}:{int(minutes):02}:{secs:06.3f}".replace(".", ",")
 
-parser = argparse.ArgumentParser(description="Script that converts .wav audio file in to .SRT subtitle file")
-parser.add_argument("--audioFileName", type=str, default=None, help="eg: FileName.wav")
 
-args = parser.parse_args()
+def split_audio(input_file: str, chunk_dir: str, chunk_length: int) -> None:
+    """Split audio into chunks using ffmpeg."""
+    os.makedirs(chunk_dir, exist_ok=True)
+    if os.path.exists(chunk_dir) and os.listdir(chunk_dir):
+        raise FileExistsError(f"Chunk directory {chunk_dir} exists and is not empty.")
 
-# ---- CONFIG ----
-FILE_NAME = args.audioFileName
-AUDIO_FILE = f"/home/yuanqing/fasterWhisper/inputAudioFiles/{FILE_NAME}"
-
-try:
-    CHUNK_DIR = "/home/yuanqing/fasterWhisper/inputAudioFiles/chunk"
-    CHUNK_LENGTH = 5*60              # seconds per chunk
-    MODEL_SIZE = "large-v3-turbo"            # try "small" or "medium"
-    COMPUTE_TYPE = "int8"           # quantized inference
-    OUTPUT_NAME = FILE_NAME.replace(".wav", ".SRT")
-    OUTPUT_FILE = f"/home/yuanqing/fasterWhisper/outputSRTFiles/{OUTPUT_NAME}"
-
-    # ---- STEP 1: Split audio into chunks using ffmpeg ----
-    os.makedirs(CHUNK_DIR, exist_ok=True)
-
-    if os.path.exists(CHUNK_DIR) and len(os.listdir(CHUNK_DIR)) != 0:
-        raise FileExistsError("Chunk directory exists and is not empty.")
-
-    # ffmpeg command: split into 10-min segments
     subprocess.run([
-        "ffmpeg", "-i", AUDIO_FILE,
-        "-f", "segment", "-segment_time", str(CHUNK_LENGTH),
-        "-c", "copy", f"{CHUNK_DIR}/chunk_%03d.wav"
-    ]).check_returncode()
+        "ffmpeg", "-i", input_file,
+        "-f", "segment", "-segment_time", str(chunk_length),
+        "-c", "copy", f"{chunk_dir}/chunk_%03d.wav"
+    ], check=True)
 
-    # ---- STEP 2: Load Faster-Whisper model ----
-    model = WhisperModel(MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
 
-    # ---- STEP 3: Transcribe each chunk ----
-    cumulativeTime = 0
-    SRT_Seq = 1
-    f = open(OUTPUT_FILE, "a", encoding="utf-8")
-    for file in sorted(glob.glob(f"{CHUNK_DIR}/chunk_*.wav")):
-        start = time.time()
-        print(f"Transcribing {file}...")
-        segments, info = model.transcribe(file, beam_size=5)
-        end = time.time()
-        print(f"Finish Transcribing {file}...")
-        print(f"Processing time: {end - start:.2f} seconds")
+def transcribe_chunks(chunk_dir: str, output_file: str, model_size: str, compute_type: str) -> None:
+    """Transcribe audio chunks and write results to an SRT file."""
+    model = WhisperModel(model_size, device="cpu", compute_type=compute_type)
 
-        for seg in segments:
-            startTimeStamp = getTimestamp(seg.start+cumulativeTime)
-            endTimeStamp = getTimestamp(seg.end+cumulativeTime)
-            line = f"{SRT_Seq}\n{startTimeStamp} -> {endTimeStamp}\n{seg.text}\n\n"
-            cumulativeTime += seg.end-seg.start
-            SRT_Seq += 1
-            f.write(line)
-            f.flush()
+    cumulative_time = 0.0
+    srt_seq = 1
 
-    print(f"✅ Transcription complete. See {OUTPUT_FILE}")
-except FileExistsError as e:
-    print(e)
-except subprocess.CalledProcessError as e:
-    print(f"File does not exist at {AUDIO_FILE}")
+    with open(output_file, "w", encoding="utf-8") as f:
+        for file in sorted(glob.glob(f"{chunk_dir}/chunk_*.wav")):
+            start = time.time()
+            print(f"Transcribing {file}...")
+            segments, _ = model.transcribe(file, beam_size=5)
+            print(f"Finished {file} in {time.time() - start:.2f} seconds")
+
+            for seg in segments:
+                start_ts = get_timestamp(seg.start + cumulative_time)
+                end_ts = get_timestamp(seg.end + cumulative_time)
+                line = f"{srt_seq}\n{start_ts} --> {end_ts}\n{seg.text}\n\n"
+                f.write(line)
+                srt_seq += 1
+
+            cumulative_time += seg.end - seg.start
+
+    print(f"✅ Transcription complete. See {output_file}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Convert .wav audio file into .SRT subtitle file")
+    parser.add_argument("--audioFileName", required=True, help="Input audio file name (e.g., FileName.wav)")
+    args = parser.parse_args()
+
+    file_name = args.audioFileName
+    audio_file = f"/home/yuanqing/fasterWhisper/inputAudioFiles/{file_name}"
+    chunk_dir = "/home/yuanqing/fasterWhisper/inputAudioFiles/chunk"
+    output_name = file_name.replace(".wav", ".SRT")
+    output_file = f"/home/yuanqing/fasterWhisper/outputSRTFiles/{output_name}"
+
+    try:
+        split_audio(audio_file, chunk_dir, chunk_length=5 * 60)
+        transcribe_chunks(chunk_dir, output_file, model_size="large-v3-turbo", compute_type="int8")
+    except FileNotFoundError:
+        print(f"❌ File not found: {audio_file}")
+    except FileExistsError as e:
+        print(f"❌ {e}")
+    except subprocess.CalledProcessError:
+        print(f"❌ ffmpeg failed to process {audio_file}")
+
+
+if __name__ == "__main__":
+    main()
