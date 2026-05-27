@@ -30,7 +30,7 @@ def get_timestamp(seconds: float) -> str:
 
 
 def split_audio(input_file: str, chunk_dir: str, chunk_length: int) -> None:
-    """Split audio into chunks using ffmpeg."""
+    """Split audio into .wav chunks using ffmpeg."""
     os.makedirs(chunk_dir, exist_ok=True)
     if os.path.exists(chunk_dir) and os.listdir(chunk_dir):
         raise FileExistsError(f"Chunk directory {chunk_dir} exists and is not empty.")
@@ -38,7 +38,8 @@ def split_audio(input_file: str, chunk_dir: str, chunk_length: int) -> None:
     subprocess.run([
         "ffmpeg", "-i", input_file,
         "-f", "segment", "-segment_time", str(chunk_length),
-        "-c", "copy", f"{chunk_dir}/chunk_%03d.wav"
+        "-c", "pcm_s16le",  # force raw WAV encoding
+        f"{chunk_dir}/chunk_%03d.wav"
     ], check=True)
 
 
