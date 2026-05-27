@@ -77,7 +77,8 @@ def main():
     file_name = args.audioFileName
     audio_file = f"/home/yuanqing/fasterWhisper/inputAudioFiles/{file_name}"
     chunk_dir = "/home/yuanqing/fasterWhisper/inputAudioFiles/chunk"
-    output_name = file_name.replace(".wav", ".SRT")
+    base_name= ".".join(file_name.split(".")[:-1])
+    output_name = f"{base_name}.SRT"
     output_file = f"/home/yuanqing/fasterWhisper/outputSRTFiles/{output_name}"
 
     try:
