@@ -2,19 +2,44 @@
 """
 Audio-to-SRT transcription script using Faster-Whisper.
 
-Steps:
-1. Reads a path to a directory of audio files
-Splits a .wav audio file into fixed-length chunks using ffmpeg.
-2. Loads a Faster-Whisper model for CPU-based transcription.
-3. Transcribes each chunk sequentially and writes results into an .SRT subtitle file.
+This script automates the conversion of audio files into subtitle files (.SRT)
+by splitting audio into fixed-length chunks, transcribing each chunk, and
+writing the results in proper SRT format.
 
-Input:
-    --input-folder <Path of directory to files to transcribe> 
-    --output-folder <Path to write output SRT files> 
+Workflow:
+    1. Read all audio files from the input folder.
+    2. For each file:
+        - Split into 5-minute chunks using ffmpeg.
+        - Load a Faster-Whisper model (CPU-only, quantized).
+        - Transcribe each chunk sequentially.
+        - Write subtitles with timestamps into an .SRT file.
+        - Clean up temporary chunk directories.
+    3. Save all output .SRT files into the specified output folder.
 
-Output:
-    SRT files saved to path specified by --output-folder
+Inputs:
+    --input-folder   Path to the folder containing audio files to transcribe.
+    --output-folder  Path to the folder where output SRT files will be written.
+
+Outputs:
+    One .SRT file per audio input, saved in the output folder.
+    Logs are written to stdout/stderr with timestamps and severity levels.
+
+Error Handling:
+    - Invalid/missing input files are logged and skipped.
+    - ffmpeg failures are logged with the filename.
+    - Chunk directories are automatically removed after processing.
+
+Examples:
+    Transcribe all audio files in the "inputAudio" folder and save results to "outputSRT":
+        uv run transcribe.py --input-folder ./inputAudio --output-folder ./outputSRT
+
+    Transcribe files from an absolute path:
+        uv run transcribe.py --input-folder /home/yuan/audio --output-folder /home/yuan/subtitles
+
+    Run with logging output visible:
+        uv run transcribe.py --input-folder ./samples --output-folder ./subs
 """
+
 
 import glob
 import subprocess
@@ -33,14 +58,32 @@ logging.basicConfig(
 
 
 def get_timestamp(seconds: float) -> str:
-    """Convert seconds to SRT timestamp format (HH:MM:SS,mmm)."""
+    """
+    Convert a time offset in seconds into SRT timestamp format.
+
+    Args:
+        seconds (float): Time offset in seconds.
+
+    Returns:
+        str: Timestamp string in the format HH:MM:SS,mmm.
+    """
     hours, remainder = divmod(seconds, 3600)
     minutes, secs = divmod(remainder, 60)
     return f"{int(hours):02}:{int(minutes):02}:{secs:06.3f}".replace(".", ",")
 
 
 def split_audio(input_file: Path, chunks_dir: Path, chunk_length: int) -> None:
-    """Split audio into .wav chunks using ffmpeg."""
+    """
+    Split an audio file into fixed-length .wav chunks using ffmpeg.
+
+    Args:
+        input_file (Path): Path to the input audio file.
+        chunks_dir (Path): Directory where chunk files will be stored.
+        chunk_length (int): Length of each chunk in seconds.
+
+    Raises:
+        subprocess.CalledProcessError: If ffmpeg fails to process the file.
+    """
     subprocess.run([
         "ffmpeg", "-i", input_file,
         "-f", "segment", "-segment_time", str(chunk_length),
@@ -52,7 +95,20 @@ def split_audio(input_file: Path, chunks_dir: Path, chunk_length: int) -> None:
 
 
 def transcribe_chunks(chunks_dir: Path, output_file: Path, model_size: str, compute_type: str) -> None:
-    """Transcribe audio chunks and write results to an SRT file."""
+    """
+    Transcribe audio chunks into an SRT subtitle file.
+
+    Args:
+        chunks_dir (Path): Directory containing audio chunks.
+        output_file (Path): Path to the output SRT file.
+        model_size (str): Whisper model size (e.g., "small", "large-v3-turbo").
+        compute_type (str): Compute type for inference (e.g., "int8").
+
+    Notes:
+        - Attempts to load the model from local cache first.
+        - Falls back to online download if cache is missing.
+        - Writes subtitles with sequential numbering and timestamps.
+    """
     try:
         # 1. Try to load instantly from local cache without checking the internet
         logging.info("Loading model from local cache...")
@@ -86,9 +142,27 @@ def transcribe_chunks(chunks_dir: Path, output_file: Path, model_size: str, comp
 
 
 @click.command()
-@click.option("--input-folder", required=True, type=click.Path(exists=True), help="Path to the folder containing the audio files to be transcribed")
-@click.option("--output-folder", required=True, type=click.Path(exists=False), help="Path to the place all output SRT files")
+@click.option("--input-folder", required=True, type=click.Path(exists=True),
+              help="Path to the folder containing audio files to transcribe.")
+@click.option("--output-folder", required=True, type=click.Path(exists=False),
+              help="Path to the folder where output SRT files will be written.")
 def main(input_folder, output_folder):
+    """
+    Main entry point for batch transcription.
+
+    Iterates over all audio files in the input folder, processes each file,
+    and writes the corresponding SRT file to the output folder.
+
+    Args:
+        input_folder (str): Path to the input folder.
+        output_folder (str): Path to the output folder.
+
+    Logs:
+        - Start/end of script execution.
+        - Number of files found and processed.
+        - Success/failure per file.
+        - Cleanup of temporary chunk directories.
+    """
     logging.info("Script started")
     input_folder_path: Path = Path(input_folder)
     input_files: list[Path] = [
@@ -122,7 +196,7 @@ def main(input_folder, output_folder):
             chunks_dir.mkdir(parents=True, exist_ok=True)
             if chunks_dir.exists() and len(list(chunks_dir.iterdir())) != 0:
                 raise FileExistsError(
-                    f"Chunk directory {chunks_dir} exists and is not empty.")
+                    f"Chunk directory {chunks_dir} exists and is not empty. Please rename or remove it.")
 
             logging.info(f"Using chunks folder at {chunks_dir}")
             split_audio(input_file, chunks_dir, chunk_length=5 * 60)
