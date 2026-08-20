@@ -165,11 +165,13 @@ def main(input_folder, output_folder):
     """
     logging.info("Script started")
     input_folder_path: Path = Path(input_folder)
-    input_files: list[Path] = [
-        path
-        for path in input_folder_path.iterdir()
-        if path.is_file()
-    ]
+    input_files: list[Path] = []
+    for path in input_folder_path.iterdir():
+        if path.is_file():
+            if not path.name.endswith(":Zone.Identifier"):
+                input_files.append(path)
+            else:
+                path.unlink(missing_ok=True)
 
     num_of_input_files: int = len(input_files)
 
