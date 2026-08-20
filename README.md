@@ -73,6 +73,30 @@ After transcription, clear the `inputAudioFiles` folder to avoid reprocessing on
 
 ---
 
+## Suggested Workflow on Windows + WSL
+
+This workflow sets up a convenient way to run transcriptions from Windows while leveraging WSL.
+
+1. **Open a terminal** at the project repo root directory (`fasterWhisper`).
+1. **Set up the project** as described in [Project Setup](#project-setup), Steps 1 and 2.
+1. **Run the setup script**:
+   ```bash
+   src/run.sh
+   ```
+   - The script will configure the required environment variable.
+   - Follow the on‑screen instructions displayed in the terminal.
+   - On successful completion, you will see:
+     ```
+     Script completed.
+     ```
+1. **Simplified workflow after setup**:
+   1. Copy audio files into the `inputAudioFiles` folder (you can use the shortcut created by the script).
+   1. Start transcription by double‑clicking `startTranscription.bat` from Windows.
+   1. When transcription finishes, access the generated `.SRT` files in the `outputSRTFiles` folder (via the shortcut).
+   1. Delete or move the processed audio files from `inputAudioFiles` to avoid reprocessing on the next run.
+
+---
+
 ## Error Handling
 
 ### Chunk Folder Exists
