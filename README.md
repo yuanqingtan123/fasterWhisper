@@ -119,3 +119,62 @@ This workflow sets up a convenient way to run transcriptions from Windows while 
 - Default chunk length: **5 minutes**.
 - Default model: **large-v3-turbo** (CPU, quantized `int8`).
 - Output timestamps follow standard SRT format: `HH:MM:SS,mmm`.
+
+---
+
+## Utility Scripts (`src/utils/`)
+
+In addition to the main transcription workflow, the repository includes helper scripts for working with subtitle files. These are located in `src/utils/`.
+
+### Subtitle Consolidation Script (`getAllSubtitles.sh`)
+- **Purpose**: Consolidates all subtitle files in a directory into a single output file.  
+- **Default behavior**: Processes `.srt` files ending with `EN.srt`.  
+- **Options**:
+  - `-d` → Directory to search (defaults to current directory).  
+  - `-p` → Search pattern for `find` (defaults to `*_EN.srt`).  
+  - `-g` → Additional `grep` filters (e.g., exclude drafts or include only certain keywords).  
+- **Output**: Creates `AllSubtitles.txt` containing filenames, full contents, and blank line separators.  
+- **Examples**:
+  ```bash
+  ./getAllSubtitles.sh
+  ./getAllSubtitles.sh -d ./series -p "*.srt"
+  ./getAllSubtitles.sh -d ./series -p "*.srt" -g "-v -e draft"
+  ```
+
+---
+
+### Subtitle Extractor Script (`getSubtitle.sh`)
+- **Purpose**: Extracts every fourth line from `.srt` files (default `*_EN.srt`) into new `.txt` files.  
+- **Use case**: Isolates dialogue text from timing and metadata.  
+- **Options**:
+  - `-d` → Directory to search (defaults to current directory).  
+  - `-p` → Search pattern (defaults to `*_EN.srt`).  
+  - `-g` → Additional `grep` filters (e.g., exclude samples).  
+- **Output**: Creates `.txt` files with extracted dialogue lines.  
+- **Examples**:
+  ```bash
+  ./getSubtitle.sh
+  ./getSubtitle.sh -d ./movies -p "*.srt"
+  ./getSubtitle.sh -d ./movies -p "*.srt" -g "-v -e draft"
+  ```
+
+---
+
+### Subtitle Merger Script (`mergeSubtitles.sh`)
+- **Purpose**: Combines an original `.srt` file with a translated `.txt` file to produce a bilingual `.srt`.  
+- **Options**:
+  - `-o` → Path to the original subtitle file.  
+  - `-t` → Path to the translated text file.  
+- **Output**: A new `.srt` file named `<original_basename>_<translation_suffix>.srt`.  
+  - If the output file already exists, the script prompts before creating a new file prefixed with `New-`.  
+- **Example**:
+  ```bash
+  ./mergeSubtitles.sh -o ./path/to/original.srt -t ./path/to/translated.txt
+  ```
+
+---
+
+### 🧠 Notes
+- All scripts require **bash ≥ 4** and standard Unix tools (`find`, `grep`, `cat`, `sed`, etc.).  
+- Place them in `src/utils/` and run from the repo root or adjust paths accordingly.  
+- These utilities are optional helpers for managing subtitle files alongside the main transcription workflow.
