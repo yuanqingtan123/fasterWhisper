@@ -136,9 +136,42 @@ def transcribe_chunks(chunks_dir: Path, output_file: Path, model_size: str, comp
                 f.write(line)
                 srt_seq += 1
 
-            cumulative_time += seg.end - seg.start
+            chunk_duration = get_chunk_duration(file)
+            cumulative_time += chunk_duration
 
     logging.info(f"✅ Transcription complete. See {output_file}")
+
+
+def get_chunk_duration(file: str) -> float:
+    """
+    Retrieve the duration of an audio chunk using ffprobe.
+
+    Args:
+        file (str): Path to the audio file (e.g., WAV chunk) whose duration
+                    should be measured.
+
+    Returns:
+        float: Duration of the audio file in seconds.
+
+    Raises:
+        subprocess.CalledProcessError: If ffprobe fails to analyze the file.
+
+    Notes:
+        - Relies on ffmpeg/ffprobe being installed and available in PATH.
+        - Ensures consistent behavior across systems by explicitly measuring
+          chunk length rather than relying on backend-specific segment timing.
+        - Useful for offsetting subtitle timestamps when concatenating multiple
+          transcribed chunks into a single SRT file.
+    """
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", file],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True
+    )
+    return float(result.stdout.strip())
 
 
 @click.command()
